@@ -13,7 +13,10 @@ if __name__ == "__main__":
     config = Helper.load_config('config.json')
     urls = config.get("urls", [])
 
-    Main = Main(urls)
+    # Obtener modo de ejecución
+    mode = Helper.get_option("Seleccione el modo de ejecución", [('Actualizar', 'U'), ('Buscar información', 'I')])
+
+    Main = Main(urls, mode)
     Main.main()
 
     input("Presiona Enter para cerrar...")  # Espera a que el usuario presione Enter antes de cerrar

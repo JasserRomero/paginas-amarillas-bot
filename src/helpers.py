@@ -1,12 +1,37 @@
 import os
 import json
 import sys
+import inquirer
 import os.path as path
 from pathlib import Path
 from openpyxl import Workbook
 
 class Helper:
 
+    @staticmethod
+    def get_option(message = "", options = []):
+        """
+        Obtiene una opcion de las propuestas.
+        """
+        questions = [
+            inquirer.List(
+                'mode',
+                message=message,
+                choices=options,
+            ),
+        ]
+        answers = inquirer.prompt(questions)
+        return answers['mode']
+
+    @staticmethod
+    def clear_console():
+        # Verificar si el sistema operativo es Windows
+        if os.name == 'nt':
+            os.system('cls')
+        # Si es Unix o MacOS
+        else:
+            os.system('clear')
+   
     @staticmethod
     def get_cpu_count():
         """

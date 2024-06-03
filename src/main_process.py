@@ -10,9 +10,11 @@ import re
 import threading
 import sys
 import json
+import os
 
 class Main:
-    def __init__(self, urls = []):
+    def __init__(self, urls = [], mode = None):
+        self.mode = mode
         self.urls = urls
         self.config_path = "config.json"
         self.name_file = 'paginasamarillas_filtrado.xlsx'
@@ -164,9 +166,86 @@ class Main:
 
         return data
 
-    def main(self):
-        Helper.printr("*** INICIO ***", 'both')
+    def process_update_files(self, update_folder):
+        """
+        Procesar archivos de actualización desde la carpeta 'update'.
+        """
+        if not os.path.exists(update_folder):
+            print(f"Error: la carpeta '{update_folder}' no existe.")
+            option = Helper.get_option("¿Desea crear la carpeta?", [('Si', 'T'), ('No', 'F')])
+            if option == "F":
+                return
+            if option == "T":
+                os.makedirs(update_folder)
+        
+        if len(os.listdir(update_folder)) == 0:
+            print(f"Error: la carpeta '{update_folder}' esta vacía. No hay xlsx a procesar")
+            return
+        
+        for file_name in os.listdir(update_folder):
+            if file_name.endswith('.xlsx'):
+                file_path = os.path.join(update_folder, file_name)
+                print(f"Procesando archivo: {file_name}")
+                try:
+                    df = pd.read_excel(file_path)
 
+                    # Verificar que la columna 'email' y 'horario' exista exista
+                    if 'email' and 'horario' not in df.columns:
+                        print("La columna 'email' o 'horario' no existe en el archivo Excel.")
+                        return
+                    else:
+                        df['email'] = df['email'].astype(str)
+                        df['horario'] = df['email'].astype(str)
+
+                    for index, row in tqdm(df.iterrows(), desc="Actualizando", total=df.shape[0]):
+                        link = row['link']
+                        try:
+                            soup = self.fetch_page_data(link)
+                            if soup is None: continue
+                            
+
+                            ## Obtener el email
+                            customer_mail = ""
+                            contenedor_div = soup.find("div", class_="contenedor")
+                            if contenedor_div and 'data-business' in contenedor_div.attrs:
+                                data_business = contenedor_div.attrs['data-business']
+                                data_business_json = json.loads(data_business)
+                                customer_mail = data_business_json.get('customerMail', "")
+
+                            ## Obtener horarios
+                            horario=""
+                            horario_div = soup.find('div', {'id': 'horario'})
+                            horarios = [] # Inicializar una lista para guardar cada entrada de horario
+                            if horario_div:
+                                for p in horario_div.find_all('p'): # Iterar sobre cada <p> en el div
+                                    dia = p.find('b').text if p.find('b') else ''  # Obtener el nombre del día (contenido en <b>)
+                                    times = p.find_all('time')  # Obtener todos los elementos <time> y sus horarios
+                                    if times: # Extraer los horarios y unirlos con ' y '
+                                        horario_texto = ' y '.join(time.get_text(strip=True) for time in times)
+                                        horarios.append(f"{dia} {horario_texto}")
+                                    else:
+                                        horarios.append(f"{dia} Cerrado") # Manejar los días cerrados
+                                horario = " | ".join(horarios)
+
+
+                            df.at[index, 'email'] = customer_mail
+                            df.at[index, 'horario'] = horario                  
+
+                            time.sleep(2) ## Espremos 2seg para la siguiente
+                        except requests.RequestException as e:
+                            continue
+                        except Exception as e:
+                            continue
+
+                    # Reemplazar NaN con cadenas vacías
+                    #df.fillna("", inplace=True)
+
+                    ## Guardar el DataFrame actualizado
+                    df.to_excel(file_path, index=False)
+                except Exception as e:
+                    print(f"Error al procesar {file_name}: {e}")
+
+    def procces_scrape_data(self):
         ## Obtener cantidad de reultados y páginas por actividad
         base_act = []
         for url in tqdm(self.urls, desc="Creando archivo base"):
@@ -201,6 +280,18 @@ class Main:
                 
                 with pd.ExcelWriter(file_path, mode="a", engine="openpyxl", if_sheet_exists="replace") as writer:
                     df_actualizado_final.to_excel(writer, sheet_name=sheet_name, index=False)
-        
+
+    def main(self):
+        Helper.clear_console()
+        Helper.printr("*** INICIO ***")
+
+        info_mode = "Actualizar" if self.mode == "U" else "Buscar información"
+        Helper.printr(f"*** Modo: {info_mode} ***", 'below')
+
+        if self.mode == "I":
+            self.procces_scrape_data()
+        if self.mode == "U":
+            self.process_update_files("update")
+            
         Helper.printr("*** FIN ***", 'above')
 
