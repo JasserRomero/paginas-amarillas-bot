@@ -27,6 +27,10 @@ jobs:
     - name: Build executable
       run: |
         pyinstaller --onefile --add-data "config.json:." main.py --name paginasamarillas
+        echo '#!/bin/bash' > dist/paginasamarillas.command
+        echo 'cd "$(dirname "$0")"' >> dist/paginasamarillas.command
+        echo './paginasamarillas' >> dist/paginasamarillas.command
+        chmod +x dist/paginasamarillas.command
         ls dist
 
     - name: Upload executable
